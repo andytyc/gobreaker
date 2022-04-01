@@ -44,12 +44,23 @@ func (s State) String() string {
 // CircuitBreaker clears the internal Counts either
 // on the change of the state or at the closed-state intervals.
 // Counts ignores the results of the requests sent before clearing.
+//
+// Counts就是一个计数器，记录当前请求成功和失败的数量
+//
+// Counts 保存请求的数量及其成功/失败。
+// CircuitBreaker 在状态变化或关闭状态间隔时清除内部计数。
+// Counts 忽略清除前发送的请求的结果。
 type Counts struct {
-	Requests             uint32
-	TotalSuccesses       uint32
-	TotalFailures        uint32
+	// 请求数
+	Requests uint32
+	// 成功
+	TotalSuccesses uint32
+	// 失败
+	TotalFailures uint32
+	// 连续成功
 	ConsecutiveSuccesses uint32
-	ConsecutiveFailures  uint32
+	// 连续失败
+	ConsecutiveFailures uint32
 }
 
 func (c *Counts) onRequest() {
@@ -77,57 +88,88 @@ func (c *Counts) clear() {
 }
 
 // Settings configures CircuitBreaker:
-//
-// Name is the name of the CircuitBreaker.
-//
-// MaxRequests is the maximum number of requests allowed to pass through
-// when the CircuitBreaker is half-open.
-// If MaxRequests is 0, the CircuitBreaker allows only 1 request.
-//
-// Interval is the cyclic period of the closed state
-// for the CircuitBreaker to clear the internal Counts.
-// If Interval is less than or equal to 0, the CircuitBreaker doesn't clear internal Counts during the closed state.
-//
-// Timeout is the period of the open state,
-// after which the state of the CircuitBreaker becomes half-open.
-// If Timeout is less than or equal to 0, the timeout value of the CircuitBreaker is set to 60 seconds.
-//
-// ReadyToTrip is called with a copy of Counts whenever a request fails in the closed state.
-// If ReadyToTrip returns true, the CircuitBreaker will be placed into the open state.
-// If ReadyToTrip is nil, default ReadyToTrip is used.
-// Default ReadyToTrip returns true when the number of consecutive failures is more than 5.
-//
-// OnStateChange is called whenever the state of the CircuitBreaker changes.
-//
-// IsSuccessful is called with the error returned from a request.
-// If IsSuccessful returns true, the error is counted as a success.
-// Otherwise the error is counted as a failure.
-// If IsSuccessful is nil, default IsSuccessful is used, which returns false for all non-nil errors.
 type Settings struct {
-	Name          string
-	MaxRequests   uint32
-	Interval      time.Duration
-	Timeout       time.Duration
-	ReadyToTrip   func(counts Counts) bool
+	// Name is the name of the CircuitBreaker.
+	Name string
+
+	// MaxRequests is the maximum number of requests allowed to pass through
+	// when the CircuitBreaker is half-open.
+	// If MaxRequests is 0, the CircuitBreaker allows only 1 request.
+	//
+	// MaxRequests是CircuitBreaker半开时允许通过的最大请求数。
+	// 如果 MaxRequests 为 0，CircuitBreaker 只允许 1 个请求。
+	MaxRequests uint32
+
+	// Interval is the cyclic period of the closed state
+	// for the CircuitBreaker to clear the internal Counts.
+	// If Interval is less than or equal to 0, the CircuitBreaker doesn't clear internal Counts during the closed state.
+	//
+	// Interval 是 CircuitBreaker 清除内部 Counts 的关闭状态的循环周期。
+	// 如果 Interval 小于等于 0，CircuitBreaker 在关闭状态时不会清除内部 Counts。
+	Interval time.Duration
+
+	// Timeout is the period of the open state,
+	// after which the state of the CircuitBreaker becomes half-open.
+	// If Timeout is less than or equal to 0, the timeout value of the CircuitBreaker is set to 60 seconds.
+	//
+	// Timeout 是打开状态的时间段，之后CircuitBreaker 的状态变为半打开状态。
+	// 如果Timeout小于等于0，则CircuitBreaker的超时值设置为60秒。
+	Timeout time.Duration
+
+	// ReadyToTrip is called with a copy of Counts whenever a request fails in the closed state.
+	// If ReadyToTrip returns true, the CircuitBreaker will be placed into the open state.
+	// If ReadyToTrip is nil, default ReadyToTrip is used.
+	// Default ReadyToTrip returns true when the number of consecutive failures is more than 5.
+	//
+	// 每当请求在关闭状态下失败时，都会使用 Counts 的副本调用 ReadyToTrip。
+	// 如果 ReadyToTrip 返回 true，CircuitBreaker 将被置于打开状态。
+	// 如果 ReadyToTrip 为 nil，则使用默认的 ReadyToTrip。
+	// 默认 ReadyToTrip 在连续失败次数超过 5 次时返回 true。
+	ReadyToTrip func(counts Counts) bool
+
+	// OnStateChange is called whenever the state of the CircuitBreaker changes.
+	//
+	// 只要 CircuitBreaker 的状态发生变化，就会调用 OnStateChange。
 	OnStateChange func(name string, from State, to State)
-	IsSuccessful  func(err error) bool
+
+	// IsSuccessful is called with the error returned from a request.
+	// If IsSuccessful returns true, the error is counted as a success.
+	// Otherwise the error is counted as a failure.
+	// If IsSuccessful is nil, default IsSuccessful is used, which returns false for all non-nil errors.
+	//
+	// IsSuccessful 被调用请求返回的错误。
+	// 如果 IsSuccessful 返回 true，则错误计为成功。 否则该错误被视为失败。
+	// 如果 IsSuccessful 为 nil，则使用默认 IsSuccessful，对于所有非 nil 错误返回 false。
+	IsSuccessful func(err error) bool
 }
 
 // CircuitBreaker is a state machine to prevent sending requests that are likely to fail.
+//
+// CircuitBreaker 是一个状态机，用于防止发送可能失败的请求。
 type CircuitBreaker struct {
-	name          string
-	maxRequests   uint32
-	interval      time.Duration
-	timeout       time.Duration
-	readyToTrip   func(counts Counts) bool
-	isSuccessful  func(err error) bool
+	name string
+	// maxRequests 限制half-open状态下最大的请求数，避免海量请求将在恢复过程中的服务再次失败
+	maxRequests uint32
+	// interval 用于在closed状态下，断路器多久清除一次Counts信息，如果设置为0则在closed状态下不会清除Counts
+	interval time.Duration
+	// timeout 进入open状态下，多长时间切换到half-open状态，默认60s
+	timeout time.Duration
+	// readyToTrip 熔断条件，当执行失败后，会根据readyToTrip决定是否进入Open状态
+	readyToTrip  func(counts Counts) bool
+	isSuccessful func(err error) bool
+	// onStateChange 断路器状态变更回调函数
 	onStateChange func(name string, from State, to State)
 
-	mutex      sync.Mutex
-	state      State
+	mutex sync.Mutex
+	// state 断路器状态
+	state State
+	// generation 是一个递增值，相当于当前断路器状态切换的次数
+	// 为了避免状态切换后，未完成请求对新状态的统计的影响，如果发现一个请求的generation同当前的generation不同，则不会进行统计计数
 	generation uint64
-	counts     Counts
-	expiry     time.Time
+	// counts 统计
+	counts Counts
+	// expiry 超时过期用于open状态到half-open状态的切换，当超时后，会从open状态切换到half-open状态
+	expiry time.Time
 }
 
 // TwoStepCircuitBreaker is like CircuitBreaker but instead of surrounding a function
