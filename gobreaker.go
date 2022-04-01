@@ -175,6 +175,8 @@ type CircuitBreaker struct {
 // TwoStepCircuitBreaker is like CircuitBreaker but instead of surrounding a function
 // with the breaker functionality, it only checks whether a request can proceed and
 // expects the caller to report the outcome in a separate step using a callback.
+//
+// TwoStepCircuitBreaker 与 CircuitBreaker 类似，但它不是用断路器功能包围一个函数，它只检查请求是否可以继续，并期望调用者使用回调在单独的步骤中报告结果。
 type TwoStepCircuitBreaker struct {
 	cb *CircuitBreaker
 }
