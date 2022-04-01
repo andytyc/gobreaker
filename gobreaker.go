@@ -118,19 +118,13 @@ type Settings struct {
 	// 如果Timeout小于等于0，则CircuitBreaker的超时值设置为60秒。
 	Timeout time.Duration
 
-	// ReadyToTrip is called with a copy of Counts whenever a request fails in the closed state.
-	// If ReadyToTrip returns true, the CircuitBreaker will be placed into the open state.
-	// If ReadyToTrip is nil, default ReadyToTrip is used.
-	// Default ReadyToTrip returns true when the number of consecutive failures is more than 5.
-	//
 	// ready to trip 准备旅行, "closed => open"
 	//
 	// 每当请求在关闭状态下失败时，都会使用 Counts 的副本调用 ReadyToTrip。
 	//
-	// 如果 ReadyToTrip 返回 true，CircuitBreaker 将被置于打开状态。
+	// 如果未配置 Setting.ReadyToTrip == nil，则使用默认的 ReadyToTrip (有默认封装逻辑: 连续失败次数超过 5 次时返回 true)。
 	//
-	// 如果未配置 Setting.ReadyToTrip == nil，则使用默认的 ReadyToTrip (有默认封装逻辑)。
-	// 即，默认 ReadyToTrip: 在连续失败次数超过 5 次时返回 true 然后 CircuitBreaker 将被置于打开状态。 。
+	// closed: 熔断条件，若返回true，表示满足条件，进行熔断，改变状态 => open
 	ReadyToTrip func(counts Counts) bool
 
 	// OnStateChange is called whenever the state of the CircuitBreaker changes.
@@ -336,10 +330,11 @@ func (cb *CircuitBreaker) Counts() Counts {
 // If a panic occurs in the request, the CircuitBreaker handles it as an error
 // and causes the same panic again.
 //
-// 如果 CircuitBreaker 接受，Execute 运行给定的请求。
+// 如果 CircuitBreaker 接受请求，Execute 执行尝试处理请求，并返回处理请求的结果。
+//
 // 如果 CircuitBreaker 拒绝请求，Execute 会立即返回错误。
-// 否则，Execute 返回请求的结果。
-// 如果请求中发生恐慌，CircuitBreaker 将其作为错误处理并再次导致相同的恐慌。
+//
+// 如果请求中发生恐慌，CircuitBreaker 将其作为错误处理并再次导致相同的恐慌，这样外部如下需要也可以自己捕捉恐慌。
 func (cb *CircuitBreaker) Execute(req func() (interface{}, error)) (interface{}, error) {
 	// 请求是否允许
 	generation, err := cb.beforeRequest()

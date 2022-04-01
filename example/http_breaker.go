@@ -22,7 +22,7 @@ func init() {
 	cb = gobreaker.NewCircuitBreaker(st)
 }
 
-// Get wraps http.Get in CircuitBreaker.
+// Get wraps http.Get in CircuitBreaker. // Get 包装一个http.get请求在断路器中
 func Get(url string) ([]byte, error) {
 	body, err := cb.Execute(func() (interface{}, error) {
 		resp, err := http.Get(url)
@@ -45,6 +45,7 @@ func Get(url string) ([]byte, error) {
 	return body.([]byte), nil
 }
 
+// go run http_breaker.go
 func main() {
 	body, err := Get("http://www.google.com/robots.txt")
 	if err != nil {
